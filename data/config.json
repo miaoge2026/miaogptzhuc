@@ -1,0 +1,17 @@
+{
+    "duckmail_api_base": "",
+    "duckmail_domain": "",
+    "duckmail_bearer": "",
+    "default_proxy": "",
+    "default_total_accounts": 10,
+    "default_output_file": "registered_accounts.txt",
+    "teams": [],
+    "oauth_required": true,
+    "oauth_issuer": "https://auth.openai.com",
+    "oauth_client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
+    "oauth_redirect_uri": "com.openai.chat://auth.openai.com/android/com.openai.chat/callback",
+    "sub2api_url": "",
+    "sub2api_token": "",
+    "upload_api_url": "",
+    "upload_api_token": ""
+}

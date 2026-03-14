@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  gpt2-register:
+    build: .
+    image: gpt2-register:latest
+    container_name: gpt2-register
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5000}:5000"
+    volumes:
+      # 持久化所有数据：配置、账号、Token
+      - ./data:/data
+    environment:
+      - PORT=5000
+      - DATA_DIR=/data
+      # 可选: 直接通过环境变量注入密钥，不依赖 config.json
+      - SECRET_KEY=${SECRET_KEY:-changeme}
+      # 以下变量可覆盖 config.json 中的同名字段（留空则从 config.json 读取）
+      - DUCKMAIL_API_BASE=${DUCKMAIL_API_BASE:-}
+      - DUCKMAIL_DOMAIN=${DUCKMAIL_DOMAIN:-}
+      - DUCKMAIL_BEARER=${DUCKMAIL_BEARER:-}
+      - PROXY=${PROXY:-}
+      - UPLOAD_API_URL=${UPLOAD_API_URL:-}
+      - UPLOAD_API_TOKEN=${UPLOAD_API_TOKEN:-}
+      - SUB2API_URL=${SUB2API_URL:-}
+      - SUB2API_TOKEN=${SUB2API_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
