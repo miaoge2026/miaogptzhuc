@@ -51,7 +51,7 @@ _task_lock    = threading.Lock()
 _task_running = False
 _task_thread  = None
 _task_stop_event = threading.Event()
-_task_progress   = {"total": 0, "done": 0, "success": 0, "fail": 0, "started_at": None}
+_task_progress   = {"total": 0, "done": 0, "success": 0, "fail": 0, "stopped": 0, "started_at": None}
 
 # ── SSE log broadcast ──────────────────────────────────────
 _log_subscribers: list[queue.Queue] = []
@@ -124,6 +124,15 @@ def _write_config(cfg: dict):
         json.dump(cfg, f, indent=4, ensure_ascii=False)
 
 
+def _safe_positive_int(value, default: int, *, minimum: int = 1) -> int:
+    """将输入安全转换为正整数，异常时回退默认值。"""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, parsed)
+
+
 # ── Account helpers ─────────────────────────────────────────
 def _parse_accounts() -> list[dict]:
     accounts = []
@@ -190,14 +199,14 @@ def start_task():
             return jsonify({"ok": False, "error": "任务正在运行中"}), 409
 
     body    = request.get_json(force=True) or {}
-    count   = max(1, int(body.get("count", 1)))
-    workers = max(1, int(body.get("workers", 1)))
+    count   = _safe_positive_int(body.get("count"), 1)
+    workers = _safe_positive_int(body.get("workers"), 1)
     proxy   = body.get("proxy", "").strip() or None
 
     _task_stop_event.clear()
     _task_progress = {
         "total": count, "done": 0,
-        "success": 0, "fail": 0,
+        "success": 0, "fail": 0, "stopped": 0,
         "started_at": datetime.utcnow().isoformat() + "Z",
     }
 
@@ -218,6 +227,14 @@ def start_task():
             _orig_register_one = config_loader._register_one
 
             def _patched_register_one(idx, total, proxy, output_file):
+                if _task_stop_event.is_set():
+                    with _task_lock:
+                        _task_progress["done"] += 1
+                        _task_progress["stopped"] += 1
+                    _broadcast_progress(dict(_task_progress))
+                    _broadcast_log(f"⚠️ [{idx}/{total}] 已跳过（任务已停止）")
+                    return False, None, "stopped"
+
                 result = _orig_register_one(idx, total, proxy, output_file)
                 ok = result[0] if result else False
                 with _task_lock:
@@ -225,7 +242,11 @@ def start_task():
                     if ok:
                         _task_progress["success"] += 1
                     else:
-                        _task_progress["fail"] += 1
+                        err = result[2] if result and len(result) > 2 else ""
+                        if str(err).lower() == "stopped":
+                            _task_progress["stopped"] += 1
+                        else:
+                            _task_progress["fail"] += 1
                 _broadcast_progress(dict(_task_progress))
                 return result
 
