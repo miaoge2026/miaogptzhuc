@@ -245,12 +245,12 @@ async function loadConfig() {
     v('cfgMailApi', cfg.duckmail_api_base || '');
     v('cfgMailDomain', cfg.duckmail_domain || '');
     v('cfgMailBearer', cfg.duckmail_bearer || '');
-    v('cfgProxy', cfg.proxy || '');
+    v('cfgProxy', cfg.default_proxy || cfg.proxy || '');
     document.getElementById('cfgOauthEnable').checked = (cfg.enable_oauth !== false);
     v('cfgOauthIssuer', cfg.oauth_issuer || 'https://auth.openai.com');
     v('cfgOauthClient', cfg.oauth_client_id || 'app_EMoamEEZ73f0CkXaXp7hrann');
-    v('cfgSub2Url', cfg.SUB2API_URL || '');
-    v('cfgSub2Token', cfg.SUB2API_TOKEN || '');
+    v('cfgSub2Url', cfg.sub2api_url || cfg.SUB2API_URL || '');
+    v('cfgSub2Token', cfg.sub2api_token || cfg.SUB2API_TOKEN || '');
     // Teams
     document.getElementById('teamList').innerHTML = '';
     (cfg.teams || []).forEach(addTeam);
@@ -274,12 +274,12 @@ function collectConfig() {
     duckmail_api_base: g('cfgMailApi'),
     duckmail_domain: g('cfgMailDomain'),
     duckmail_bearer: g('cfgMailBearer'),
-    proxy: g('cfgProxy'),
+    default_proxy: g('cfgProxy'),
     enable_oauth: document.getElementById('cfgOauthEnable').checked,
     oauth_issuer: g('cfgOauthIssuer'),
     oauth_client_id: g('cfgOauthClient'),
-    SUB2API_URL: g('cfgSub2Url'),
-    SUB2API_TOKEN: g('cfgSub2Token'),
+    sub2api_url: g('cfgSub2Url'),
+    sub2api_token: g('cfgSub2Token'),
     teams,
   };
 }
