@@ -24,50 +24,88 @@ from curl_cffi import requests as curl_requests
 
 
 # ================= 加载配置 =================
+_CONFIG_DEFAULTS = {
+    "total_accounts": 4,
+    "duckmail_api_base": "",
+    "duckmail_domain": "",
+    "duckmail_bearer": "",
+    "proxy": "",
+    "default_proxy": "",
+    "output_file": "registered_accounts.txt",
+    "csv_file": "registered_accounts.csv",
+    "invite_tracker_file": "invite_tracker.json",
+    "enable_oauth": True,
+    "oauth_required": True,
+    "oauth_issuer": "https://auth.openai.com",
+    "oauth_client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
+    "oauth_redirect_uri": "http://localhost:1455/auth/callback",
+    "ak_file": "ak.txt",
+    "rk_file": "rk.txt",
+    "token_json_dir": "codex_tokens",
+    "upload_api_url": "",
+    "upload_api_token": "",
+    "sub2api_url": "",
+    "sub2api_token": "",
+    "SUB2API_URL": "",
+    "SUB2API_TOKEN": "",
+    "teams": [],
+}
+
+
+def _resolve_data_dir():
+    return os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+
+
+def _resolve_config_path(data_dir: str):
+    data_dir_config = os.path.join(data_dir, "config.json")
+    if os.path.exists(data_dir_config):
+        return data_dir_config
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _apply_aliases(config):
+    if config.get("default_proxy") and not config.get("proxy"):
+        config["proxy"] = config["default_proxy"]
+    if config.get("sub2api_url") and not config.get("SUB2API_URL"):
+        config["SUB2API_URL"] = config["sub2api_url"]
+    if config.get("sub2api_token") and not config.get("SUB2API_TOKEN"):
+        config["SUB2API_TOKEN"] = config["sub2api_token"]
+    if config.get("SUB2API_URL") and not config.get("sub2api_url"):
+        config["sub2api_url"] = config["SUB2API_URL"]
+    if config.get("SUB2API_TOKEN") and not config.get("sub2api_token"):
+        config["sub2api_token"] = config["SUB2API_TOKEN"]
+    return config
+
+
 def _load_config():
     """从 config.json 加载配置，环境变量优先级更高"""
-    config = {
-        "total_accounts": 4,
-        "duckmail_api_base": "",
-        "duckmail_domain": "",
-        "duckmail_bearer": "",
-        "proxy": "",
-        "output_file": "registered_accounts.txt",
-        "csv_file": "registered_accounts.csv",
-        "invite_tracker_file": "invite_tracker.json",
-        "enable_oauth": True,
-        "oauth_required": True,
-        "oauth_issuer": "https://auth.openai.com",
-        "oauth_client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
-        "oauth_redirect_uri": "http://localhost:1455/auth/callback",
-        "ak_file": "ak.txt",
-        "rk_file": "rk.txt",
-        "token_json_dir": "codex_tokens",
-        "upload_api_url": "",
-        "upload_api_token": "",
-        "SUB2API_URL": "",
-        "SUB2API_TOKEN": "",
-        "teams": [],
-    }
+    config = dict(_CONFIG_DEFAULTS)
+    data_dir = _resolve_data_dir()
+    config_path = _resolve_config_path(data_dir)
 
-    # 优先使用 DATA_DIR 环境变量（Docker volume），否则用脚本同级目录
-    _data_dir   = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(_data_dir, "config.json")
-    if not os.path.exists(config_path):
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
     if os.path.exists(config_path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 file_config = json.load(f)
-                config.update(file_config)
+                if isinstance(file_config, dict):
+                    config.update(file_config)
         except Exception as e:
             print(f"⚠️ 加载 config.json 失败: {e}")
 
+    config = _apply_aliases(config)
     config["duckmail_api_base"] = os.environ.get("DUCKMAIL_API_BASE", config["duckmail_api_base"])
     config["duckmail_bearer"] = os.environ.get("DUCKMAIL_BEARER", config["duckmail_bearer"])
     config["duckmail_domain"] = os.environ.get("DUCKMAIL_DOMAIN", config["duckmail_domain"])
-    config["proxy"] = os.environ.get("PROXY", config["proxy"])
-    config["total_accounts"] = int(os.environ.get("TOTAL_ACCOUNTS", config["total_accounts"]))
+    config["proxy"] = os.environ.get("PROXY", config.get("proxy") or config.get("default_proxy", ""))
+    config["default_proxy"] = config["proxy"]
+    config["total_accounts"] = _safe_int(os.environ.get("TOTAL_ACCOUNTS", config["total_accounts"]), config["total_accounts"])
     config["enable_oauth"] = os.environ.get("ENABLE_OAUTH", config["enable_oauth"])
     config["oauth_required"] = os.environ.get("OAUTH_REQUIRED", config["oauth_required"])
     config["oauth_issuer"] = os.environ.get("OAUTH_ISSUER", config["oauth_issuer"])
@@ -76,16 +114,16 @@ def _load_config():
     config["ak_file"] = os.environ.get("AK_FILE", config["ak_file"])
     config["rk_file"] = os.environ.get("RK_FILE", config["rk_file"])
     config["token_json_dir"] = os.environ.get("TOKEN_JSON_DIR", config["token_json_dir"])
-    # 将相对路径解析到 DATA_DIR
-    _data_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
-    for _key in ("ak_file", "rk_file", "token_json_dir", "invite_tracker_file"):
-        _val = config.get(_key, "")
-        if _val and not os.path.isabs(_val):
-            config[_key] = os.path.join(_data_dir, _val)
     config["upload_api_url"] = os.environ.get("UPLOAD_API_URL", config["upload_api_url"])
     config["upload_api_token"] = os.environ.get("UPLOAD_API_TOKEN", config["upload_api_token"])
-    config["SUB2API_URL"] = os.environ.get("SUB2API_URL", config["SUB2API_URL"])
-    config["SUB2API_TOKEN"] = os.environ.get("SUB2API_TOKEN", config["SUB2API_TOKEN"])
+    config["sub2api_url"] = os.environ.get("SUB2API_URL", config.get("sub2api_url") or config.get("SUB2API_URL", ""))
+    config["sub2api_token"] = os.environ.get("SUB2API_TOKEN", config.get("sub2api_token") or config.get("SUB2API_TOKEN", ""))
+    config = _apply_aliases(config)
+
+    for key in ("ak_file", "rk_file", "token_json_dir", "invite_tracker_file", "csv_file"):
+        value = config.get(key, "")
+        if value and not os.path.isabs(value):
+            config[key] = os.path.join(data_dir, value)
 
     return config
 
@@ -105,8 +143,8 @@ DUCKMAIL_BEARER = _CONFIG["duckmail_bearer"]
 DEFAULT_TOTAL_ACCOUNTS = _CONFIG["total_accounts"]
 DEFAULT_PROXY = _CONFIG["proxy"]
 DEFAULT_OUTPUT_FILE = _CONFIG["output_file"]
-CSV_FILE = _CONFIG.get("csv_file", "registered_accounts.csv")
-INVITE_TRACKER_FILE = _CONFIG.get("invite_tracker_file", "invite_tracker.json")
+CSV_FILE = _CONFIG["csv_file"]
+INVITE_TRACKER_FILE = _CONFIG["invite_tracker_file"]
 ENABLE_OAUTH = _as_bool(_CONFIG.get("enable_oauth", True))
 OAUTH_REQUIRED = _as_bool(_CONFIG.get("oauth_required", True))
 OAUTH_ISSUER = _CONFIG["oauth_issuer"].rstrip("/")
@@ -117,8 +155,8 @@ RK_FILE = _CONFIG["rk_file"]
 TOKEN_JSON_DIR = _CONFIG["token_json_dir"]
 UPLOAD_API_URL = _CONFIG["upload_api_url"]
 UPLOAD_API_TOKEN = _CONFIG["upload_api_token"]
-SUB2API_URL = _CONFIG["SUB2API_URL"]
-SUB2API_TOKEN = _CONFIG["SUB2API_TOKEN"]
+SUB2API_URL = _CONFIG["sub2api_url"]
+SUB2API_TOKEN = _CONFIG["sub2api_token"]
 TEAMS = _CONFIG.get("teams", [])
 
 if not DUCKMAIL_BEARER:
